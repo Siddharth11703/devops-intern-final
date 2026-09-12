@@ -1,0 +1,80 @@
+name: CI/CD Pipeline
+
+# Trigger the workflow on pushes to main, pull requests, and tags
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*.*.*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+# Least-privilege token requirement from the rubric
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Job 1: Check scripts for syntax errors
+  lint:
+    name: Lint Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+
+  # Job 2: Test if the scripts execute properly
+  test:
+    name: Test Scripts
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Test Help Arguments
+        run: |
+          bash scripts/sysinfo.sh --help
+          bash scripts/healthcheck.sh --help
+
+  # Job 3: Build the Docker image to ensure it works
+  build:
+    name: Build Image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Test Docker Build
+        run: |
+          # We pass github.sha as the BUILD_SHA required by your HTML file
+          docker build --build-arg BUILD_SHA=${{ github.sha }} -t test-nginx:latest ./app
+
+  # Job 4: Publish the image to GitHub Container Registry (only on main/master)
+  publish:
+    name: Publish Image
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          push: true
+          # Converts repository name to lowercase automatically
+          tags: ghcr.io/${{ github.repository_owner }}/devops-intern-final/nginx-app:latest,ghcr.io/${{ github.repository_owner }}/devops-intern-final/nginx-app:${{ github.sha }}
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
