@@ -16,8 +16,8 @@ RUN mkdir -p /var/cache/nginx /var/run /var/log/nginx && \
 USER appuser
 
 # 6. Copy our custom NGINX config and HTML file into the container
-COPY --chown=appuser:appuser app/nginx.conf /etc/nginx/nginx.conf
-COPY --chown=appuser:appuser app/index.html /usr/share/nginx/html/index.html
+COPY --chown=appuser:appuser nginx.conf /etc/nginx/nginx.conf
+COPY --chown=appuser:appuser index.html /usr/share/nginx/html/index.html
 
 # 7. Replace the placeholder in the HTML with the actual BUILD_SHA
 RUN sed -i "s/\${BUILD_SHA}/${BUILD_SHA}/g" /usr/share/nginx/html/index.html
